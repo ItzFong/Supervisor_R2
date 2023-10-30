@@ -1,0 +1,298 @@
+#include <webots/Supervisor.hpp>
+#include <webots/Robot.hpp>
+#include <webots/Node.hpp>
+#include <webots/Camera.hpp>
+#include <stdio.h>
+#include <math.h>
+#include <stdlib.h>
+#define TIME_STEP 32
+using namespace webots;
+using namespace std;
+
+//Toa do
+typedef struct 
+{
+  double x,z,dx,dz;
+}Coord;
+
+//Toa do duong tron
+typedef struct 
+{
+  double I1,I2,R1,R2,x1,x2,z1,z2;
+}Circle;
+//Cac duong tron
+
+// CheckPoint
+Coord CP[5] = {{1.63, 2.5, 0.02,0.081}, {2.8, -0.56,0.081,0.02}, {-1.4, -0.59,0.081,0.02}, {-4.34, -1.28,0.081,0.02}, {-0.62, -2.51,0.02,0.081}};
+
+//Start point of every line
+Coord CL[53] = {{-2.86, 1.1, 0.02, 0.081},//1
+{-2.856, 5, 0.02, 0.081},//2
+{-2.16, 5.01, 0.02, 0.081},//3
+{-1.82, 5.01, 0.02, 0.081},//4
+{-1.48, 5.01, 0.02, 0.081},//5
+{-1.14, 5.01, 0.02, 0.081},//6
+{-0.795, 5.01, 0.02, 0.081},//7
+{-0.455, -1.48, 0.02, 0.081},//8
+{0.245, 5.02, 0.02, 0.081},//9
+{0.245, 4.65, 0.02, 0.081},//10
+{2.305, 4.65, 0.081, 0.02},//11
+{2.455, 4.49, 0.02, 0.081},//12
+{2.455, 3.93, 0.02, 0.081},//13
+{1.075, 3.93,0.081, 0.02},//14
+{1.075, 3.59, 0.02, 0.081},//15
+{0.715, 3.59,0.081, 0.02},//16
+{0.715, 3.93, 0.02, 0.081},//17
+{0.355, 3.93,0.081, 0.02},//18
+{0.355, 3.59, 0.02, 0.081},//19
+{-0.005, 3.59,0.081, 0.02},//20
+{-0.005, 3.93, 0.02, 0.081},//21
+{-1.315, 3.93, 0.081, 0.02},//22
+{-1.665, 3.58, 0.02, 0.081},//23
+{-1.665, 1.75, 0.02, 0.081},//24
+{-1.325, 1.41, 0.02, 0.081},//25
+{-1.545, 1.18, 0.02, 0.081},//26
+{-1.325, 0.96, 0.02, 0.081},//27
+{-1.545, 0.73, 0.02, 0.081},//28
+{-1.325, 0.51, 0.02, 0.081},//29
+{-1.545, 0.28, 0.02, 0.081},//30
+{-1.325, 0.05, 0.02, 0.081},//31
+{-1.665, -0.29, 0.02, 0.081},//32
+{-1.665, -1.46, 0.02, 0.081},//33
+{2.415, -1.46, 0.081, 0.02},//34
+{2.415, -0.82, 0.02, 0.081},//35
+{2.415, -0.11, 0.02, 0.081},//36
+{2.415, 0.43, 0.02, 0.081},//37
+{3.62, 0.435, 0.081, 0.02},//38
+{3.62, 0.945, 0.02, 0.081},//39**
+{3.77, 1.055, 0.3, 0.081},//40**
+{4.02, 2.845, 0.02, 0.081},//41**
+{3.87, 2.865, 0.3, 0.081},//42**
+{3.77, 3.525, 0.02, 0.081},//43**
+{3.63, 3.555, 0.02, 0.081},//44
+{3.63, 4.145, 0.02, 0.081},//45
+{3.97, 4.495, 0.081, 0.02},//46
+{5.47, 4.495, 0.081, 0.02},//47
+{5.47, 2.885, 0.02, 0.081},//48
+{4.73, 2.885, 0.081, 0.02},//49
+{4.75, 2.165, 0.02, 0.081},//50
+{5.47, 2.155, 0.081, 0.02},//51
+{5.47, 0.795, 0.02, 0.081},//52
+{5.47, 0.495, 0.02, 0.081},//53
+};
+
+//Line type
+int LineType[53] = {0,1,2,3,4,5,6,7,0,0,8,0,0,0,0,0,0,0,0,0,0,9,0,0,0,0,0,0,0,0,0,0,0,0,0,10,0,0,0,0,-1,0,-1,0,0,11,0,0,0,0,0,0,0};
+//Kiem tra check line  +  check point
+bool ForwardLine(Coord trans, Coord point)
+{ 
+  
+  if(trans.x>=(point.x-point.dx) && trans.x<=(point.x+point.dx) && trans.z>=(point.z-point.dz) && trans.z<=(point.z+point.dz))
+  {
+    return true;
+  }else return false;
+}
+
+//Rotation
+Coord Rotation(const double *trans, Coord coord, const double *rotat)
+{
+  Coord Result;
+  if(rotat[1]<0){
+      Result.x =  trans[0]+ coord.x*cos(rotat[3]) - coord.z*sin(rotat[3]);
+      Result.z =  trans[2]+ coord.x*sin(rotat[3]) + coord.z*cos(rotat[3]);
+    }
+    else
+    {
+      Result.x =  trans[0]+ coord.x*cos(-rotat[3]) - coord.z*sin(-rotat[3]);
+      Result.z =  trans[2]+ coord.x*sin(-rotat[3]) + coord.z*cos(-rotat[3]);
+    }
+  return Result;
+}
+
+//Check out line o duong thang 
+bool StraightLine(int index, Coord L, Coord R, double d)
+{
+  double a = CL[index-1].z - CL[index].z;
+  double b = CL[index].x - CL[index-1].x;
+  double c = -CL[index-1].x*a - CL[index-1].z*b;
+  if((abs(a*L.x+b*L.z+c))/sqrt(a*a + b*b) > d || (abs(a*R.x+b*R.z+c)/sqrt(a*a+b*b)>d))
+  {
+    return true;
+  }else return false;
+}
+
+//Kiem tra outline duong cong
+bool CurveLine(Coord L, Coord R, double I1, double I2, double R1, double R2)
+{
+  if((L.x-I1)*(L.x-I1) + (L.z-I2)*(L.z-I2) > R1*R1 
+  && (L.x-I1)*(L.x-I1) + (L.z-I2)*(L.z-I2) < R2*R2 
+  && (R.x-I1)*(R.x-I1) + (R.z-I2)*(R.z-I2) > R1*R1 
+  && (R.x-I1)*(R.x-I1) + (R.z-I2)*(R.z-I2) < R2*R2)  
+  {  
+      return false;
+  }
+  else return true;
+}
+
+//Check out Line
+bool CheckOutLine(Coord L, Coord R, int numline)
+{
+  
+  switch(LineType[numline-1]){
+    case 0:
+      return StraightLine(numline, L, R, 0.15);
+    case 1: 
+      return CurveLine(L, R, -4.11, 2.313, 0.343, 0.64);
+    case 2: 
+      return CurveLine(L, R, -3.12, 2.293, 0.3252, 0.64);
+    case 3:
+      return CurveLine(L, R, 3.7918, 0.0243, 0.438, 0.74);
+    case 4: 
+      return CurveLine(L, R, 2.22, -0.1, 0.442, 0.74);
+    case 5: 
+      return CurveLine(L, R, 1.136, -0.11, 0.34, 0.63);
+    case 6:
+      return CurveLine(L, R, 0.253, -0.08, 0.24, 0.54);
+    case 7:
+      return CurveLine(L, R, -0.637, -0.09, 0.35, 0.648);
+     case 8:
+       return CurveLine(L, R, -4.287, -0.89, 0.24, 0.53);
+     case 9: 
+       return CurveLine(L, R, -0.409, -1.6718, 0.2355, 0.53);
+    default: return false;
+    }
+}
+
+
+
+int main(int argc, char **argv) {
+  // create the Robot instance.
+  Supervisor *supervisor = new Supervisor();
+  Coord LPoint0, RPoint0, MPoint0;
+  double startTime = 0.0;
+  //Khai bao camera 
+  //Index cho Check line va check point
+  int CLine = 1;
+  int CPoint = 0;
+  //Get data from solid and car
+  Node *R = supervisor->getFromDef("R_A");
+  Node *L = supervisor->getFromDef("L_A");
+  Node *M = supervisor->getFromDef("M_A");
+  Node *Car = supervisor->getFromDef("Speed_Line_Follower_Robot_V4_A");
+  Node *cam = supervisor->getFromDef("cam");
+  //Get translation of car and solid
+  Field *R_trans_field = R->getField("translation");
+  Field *L_trans_field = L->getField("translation");
+  Field *M_trans_field = M->getField("translation");
+  Field *Car_trans_field = Car->getField("translation");
+  Field *CarController = Car->getField("controller");
+  //Set up cho camera.
+  //Get rotation of Car
+  Field *Car_rot_field = Car->getField("rotation");
+  
+  //Vong lap
+   while (supervisor->step(TIME_STEP) != -1) {
+    //Enable cam
+    
+    
+   
+    //Xu ly rotation o dau xe
+    const double *Car_rot = Car_rot_field->getSFRotation();
+    const double *Car_trans = Car_trans_field->getSFVec3f();
+    
+    //On the R
+    LPoint0.x = -0.04;
+    LPoint0.z = -0.14;
+    Coord LPoint = Rotation(Car_trans,LPoint0,Car_rot);
+    const double LTranslation[3] = {LPoint.x, Car_trans[1], LPoint.z};
+    L_trans_field->setSFVec3f(LTranslation);
+
+    //On the L
+    RPoint0.x = 0.04;
+    RPoint0.z = -0.14;
+    Coord RPoint = Rotation(Car_trans,RPoint0,Car_rot);
+    const double RTranslation[3] = {RPoint.x, Car_trans[1], RPoint.z};
+    R_trans_field->setSFVec3f(RTranslation);
+
+    //In the M
+    MPoint0.x = 0;
+    MPoint0.z = -0.14;
+    Coord MPoint = Rotation(Car_trans,MPoint0,Car_rot);
+    const double MTranslation[3] = {MPoint.x, Car_trans[1], MPoint.z};
+    M_trans_field->setSFVec3f(MTranslation);
+    
+    
+    
+    //Check out line 
+    if (CheckOutLine(LPoint, RPoint, CLine))
+    {
+     
+      supervisor->wwiSendText("O|" + to_string(supervisor->getTime()));
+      supervisor->simulationSetMode(webots::Supervisor::SimulationMode::SIMULATION_MODE_PAUSE);
+      
+    }
+
+    //Kiem tra di qua Check line 
+    if(ForwardLine(MPoint, CL[CLine])){
+        
+       CLine++;
+    }
+    
+    if(CLine >= 42)
+       {          
+          Coord xedua;
+          xedua.x = 0;
+          xedua.z = 0;
+          Coord Car_coord = Rotation(Car_trans,xedua,Car_rot);
+          if(ForwardLine(Car_coord, CL[41]))
+          {
+            if(CPoint == 4)
+            {
+               if(startTime == 0.0)
+              {
+                startTime = supervisor->getTime();
+              }
+              cout<<startTime;
+              if (supervisor->getTime() - startTime >= 06.00) {
+                cout<<"\nHoan thanh";
+                cout<<"\nHoan thanh";
+                cout<<"\nHoan thanh";
+                cout<<"\nHoan thanh";
+                supervisor->wwiSendText("C.0" + to_string(CPoint+1) + "|" + to_string(supervisor->getTime()));
+                supervisor->simulationSetMode(webots::Supervisor::SimulationMode::SIMULATION_MODE_PAUSE);
+              }
+              if (CLine == 44)
+              {
+                supervisor->wwiSendText("O|" + to_string(supervisor->getTime()));
+                cout<<"\nOutline";
+                supervisor->simulationSetMode(webots::Supervisor::SimulationMode::SIMULATION_MODE_PAUSE);
+              }
+            }
+            
+          }
+   
+        }
+   
+  
+    //Kiem tra di qua Checkpoint
+    if (ForwardLine(MPoint, CP[CPoint]))
+    {
+      if(CPoint<4)
+      {
+        supervisor->wwiSendText("C." + to_string(CPoint+1) + "|" + to_string(supervisor->getTime()));
+        fflush(stdout);
+        CPoint++;
+      }
+      
+    }
+    //Quy dinh goc chuyen camera.
+    
+    
+
+   }
+   
+  // Enter here exit cleanup code.
+
+  delete supervisor;
+  return 0;
+}
